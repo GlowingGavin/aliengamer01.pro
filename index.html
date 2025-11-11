@@ -1,26 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Two Player Chess</title>
-  <!-- Chessboard.js CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>Vanilla JS Chessboard</title>
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #eee;
+    }
+    #chessboard {
+        display: grid;
+        grid-template-columns: repeat(8, 60px);
+        grid-template-rows: repeat(8, 60px);
+        border: 2px solid #333;
+    }
+    .square {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 36px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .white { background-color: #f0d9b5; }
+    .black { background-color: #b58863; }
+    .highlight { background-color: yellow !important; }
+</style>
 </head>
 <body>
-  <h1>Two Player Chess</h1>
-  <div id="board" style="width: 400px"></div>
 
-  <!-- jQuery (required by chessboard.js) -->
-  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<div id="chessboard"></div>
 
-  <!-- Chess.js (game logic) -->
-  <script src="https://unpkg.com/chess.js@0.12.0/chess.min.js"></script>
+<script>
+const boardEl = document.getElementById('chessboard');
+const initialBoard = [
+  ["r","n","b","q","k","b","n","r"],
+  ["p","p","p","p","p","p","p","p"],
+  ["","","","","","","",""],
+  ["","","","","","","",""],
+  ["","","","","","","",""],
+  ["","","","","","","",""],
+  ["P","P","P","P","P","P","P","P"],
+  ["R","N","B","Q","K","B","N","R"]
+];
 
-  <!-- Chessboard.js (UI) -->
-  <script src="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+const piecesUnicode = {
+  "K":"♔","Q":"♕","R":"♖","B":"♗","N":"♘","P":"♙",
+  "k":"♚","q":"♛","r":"♜","b":"♝","n":"♞","p":"♟"
+};
 
-  <!-- Custom JS -->
-  <script src="script.js"></script>
+let selected = null;
+
+// Draw board
+function drawBoard() {
+  boardEl.innerHTML = "";
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const square = document.createElement("div");
+      square.classList.add("square");
+      square.classList.add((r+c)%2===0?"white":"black");
+      square.dataset.row = r;
+      square.dataset.col = c;
+      square.textContent = piecesUnicode[initialBoard[r][c]] || "";
+      square.addEventListener("click", handleClick);
+      boardEl.appendChild(square);
+    }
+  }
+}
+
+// Handle click for moving
+function handleClick(e){
+  const r = parseInt(this.dataset.row);
+  const c = parseInt(this.dataset.col);
+  if(selected){
+    // Move piece
+    if(selected.row !== r || selected.col !== c){
+      initialBoard[r][c] = initialBoard[selected.row][selected.col];
+      initialBoard[selected.row][selected.col] = "";
+    }
+    clearHighlights();
+    selected = null;
+    drawBoard();
+  } else if(initialBoard[r][c] !== ""){
+    selected = {row: r, col: c};
+    this.classList.add("highlight");
+  }
+}
+
+// Clear highlights
+function clearHighlights(){
+  document.querySelectorAll(".square").forEach(sq => sq.classList.remove("highlight"));
+}
+
+// Initialize
+drawBoard();
+</script>
+
 </body>
 </html>
