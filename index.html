@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AlienGamer Chess Board</title>
+<title>AlienGamer Chess</title>
 <style>
   body {
-    background-color: #202020;
+    background-color: #111;
+    color: white;
+    font-family: Arial, sans-serif;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     height: 100vh;
   }
   #board {
@@ -17,6 +20,7 @@
     grid-template-columns: repeat(8, 80px);
     grid-template-rows: repeat(8, 80px);
     border: 4px solid #000;
+    margin-bottom: 20px;
   }
   .square {
     width: 80px;
@@ -33,76 +37,95 @@
     height: 72px;
     cursor: grab;
   }
+  #turn {
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+  }
 </style>
 </head>
 <body>
   <div id="board"></div>
+  <div id="turn">White to move</div>
+
+<!-- Chess logic -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0/chess.min.js"></script>
 
 <script>
 const board = document.getElementById('board');
+const turnDisplay = document.getElementById('turn');
+const game = new Chess(); // chess.js object
+
 const files = ['a','b','c','d','e','f','g','h'];
 const ranks = [8,7,6,5,4,3,2,1];
 
-// Basic starting position (FEN layout)
-let startPos = {
-  a8: 'br', b8: 'bn', c8: 'bb', d8: 'bq', e8: 'bk', f8: 'bb', g8: 'bn', h8: 'br',
-  a7: 'bp', b7: 'bp', c7: 'bp', d7: 'bp', e7: 'bp', f7: 'bp', g7: 'bp', h7: 'bp',
-  a2: 'wp', b2: 'wp', c2: 'wp', d2: 'wp', e2: 'wp', f2: 'wp', g2: 'wp', h2: 'wp',
-  a1: 'wr', b1: 'wn', c1: 'wb', d1: 'wq', e1: 'wk', f1: 'wb', g1: 'wn', h1: 'wr'
-};
+function drawBoard() {
+  board.innerHTML = '';
+  for (let r of ranks) {
+    for (let f of files) {
+      const square = document.createElement('div');
+      square.classList.add('square');
+      if ((files.indexOf(f) + ranks.indexOf(r)) % 2 === 0)
+        square.classList.add('light');
+      else
+        square.classList.add('dark');
 
-// Build the board squares
-for (let r of ranks) {
-  for (let f of files) {
-    const square = document.createElement('div');
-    square.classList.add('square');
-    if ((files.indexOf(f) + ranks.indexOf(r)) % 2 === 0)
-      square.classList.add('light');
-    else
-      square.classList.add('dark');
+      const id = f + r;
+      square.id = id;
 
-    const id = f + r;
-    square.id = id;
-
-    if (startPos[id]) {
-      const img = document.createElement('img');
-      img.src = `pieces/${startPos[id]}.png`;
-      img.classList.add('piece');
-      img.draggable = true;
-      square.appendChild(img);
+      const piece = game.get(id);
+      if (piece) {
+        const img = document.createElement('img');
+        img.src = `pieces/${piece.color}${piece.type}.png`;
+        img.classList.add('piece');
+        img.draggable = true;
+        square.appendChild(img);
+      }
+      board.appendChild(square);
     }
-    board.appendChild(square);
   }
+  turnDisplay.textContent = game.turn() === 'w' ? 'White to move' : 'Black to move';
 }
 
-// Drag-and-drop behavior
-let draggedPiece = null;
+drawBoard();
+
+let dragged = null;
 let sourceSquare = null;
 
 document.addEventListener('dragstart', e => {
   if (e.target.classList.contains('piece')) {
-    draggedPiece = e.target;
-    sourceSquare = e.target.parentElement;
-    setTimeout(() => (e.target.style.visibility = 'hidden'), 0);
+    dragged = e.target;
+    sourceSquare = e.target.parentElement.id;
+    const piece = game.get(sourceSquare);
+    if (!piece || piece.color !== game.turn()) {
+      e.preventDefault();
+      dragged = null;
+    } else {
+      setTimeout(() => (e.target.style.visibility = 'hidden'), 0);
+    }
   }
 });
 
 document.addEventListener('dragend', e => {
-  if (draggedPiece) draggedPiece.style.visibility = 'visible';
-  draggedPiece = null;
+  if (dragged) dragged.style.visibility = 'visible';
+  dragged = null;
 });
 
-document.querySelectorAll('.square').forEach(sq => {
-  sq.addEventListener('dragover', e => e.preventDefault());
-  sq.addEventListener('drop', e => {
-    e.preventDefault();
-    if (!draggedPiece) return;
-    if (sq !== sourceSquare) {
-      // Remove any existing piece (for captures)
-      if (sq.firstChild) sq.removeChild(sq.firstChild);
-      sq.appendChild(draggedPiece);
+board.addEventListener('dragover', e => e.preventDefault());
+
+board.addEventListener('drop', e => {
+  e.preventDefault();
+  const targetSquare = e.target.closest('.square').id;
+  if (!sourceSquare || !targetSquare) return;
+
+  const move = game.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+  if (move) {
+    drawBoard();
+    if (game.isGameOver()) {
+      if (game.isCheckmate()) alert(`Checkmate! ${move.color === 'w' ? 'White' : 'Black'} wins!`);
+      else if (game.isDraw()) alert('Draw!');
     }
-  });
+  }
+  sourceSquare = null;
 });
 </script>
 </body>
