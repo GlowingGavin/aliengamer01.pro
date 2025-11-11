@@ -1,0 +1,15 @@
+body {
+  text-align: center;
+  background: #f0f0f0;
+  font-family: Arial, sans-serif;
+}
+
+h1 {
+  margin: 20px;
+  color: #333;
+}
+
+/* Highlight last move squares */
+.square-55d63.highlight {
+  background-color: yellow !important;
+}
