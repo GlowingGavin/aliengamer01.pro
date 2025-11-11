@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AlienGamer Chess - Live Review</title>
+<title>AlienGamer Chess — Live Review</title>
+
+<!-- ✅ Local Stockfish (place at /js/stockfish.js) -->
+<script src="js/stockfish.js"></script>
+
 <style>
   body {
     background:#111;
@@ -24,67 +28,49 @@
     position:relative;
   }
   .square {
-    width:80px;
-    height:80px;
-    display:flex;
-    justify-content:center;
-    align-items:center;
+    width:80px;height:80px;
+    display:flex;justify-content:center;align-items:center;
     position:relative;
   }
   .light { background:#f0d9b5; }
-  .dark { background:#b58863; }
-  .piece { width:72px; height:72px; cursor:grab; }
-  #turn { font-size:1.3rem; margin-top:15px; }
+  .dark  { background:#b58863; }
+  .piece { width:72px;height:72px;cursor:grab; }
+  #turn { font-size:1.3rem;margin-top:15px; }
 
-  /* Overlay + icon */
   .overlay {
-    position:absolute;
-    top:0; left:0;
-    width:100%; height:100%;
-    opacity:0.5;
-    border-radius:2px;
-    z-index:1;
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    opacity:0.5;border-radius:2px;z-index:1;
   }
   .moveIcon {
-    position:absolute;
-    top:2px;
-    right:2px;
-    width:28px;
-    height:28px;
-    z-index:2;
-    pointer-events:none;
+    position:absolute;top:2px;right:2px;width:28px;height:28px;
+    z-index:2;pointer-events:none;
   }
 
-  /* Promotion popup */
   #promoMenu {
-    position:fixed;
-    top:50%; left:50%;
+    position:fixed;top:50%;left:50%;
     transform:translate(-50%,-50%);
-    background:#222;
-    border:2px solid #0ff;
-    border-radius:10px;
-    padding:15px;
-    display:none;
-    gap:10px;
-    z-index:9999;
+    background:#222;border:2px solid #0ff;border-radius:10px;
+    padding:15px;display:none;gap:10px;z-index:9999;
   }
   #promoMenu img {
-    width:60px; height:60px; cursor:pointer;
-    border:2px solid transparent; border-radius:6px;
+    width:60px;height:60px;cursor:pointer;
+    border:2px solid transparent;border-radius:6px;
   }
   #promoMenu img:hover { border-color:#0ff; }
 </style>
 </head>
 <body>
   <div id="board"></div>
-  <div id="turn">White to move</div>
+  <div id="turn">Loading engine …</div>
   <div id="promoMenu"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/stockfish@17/src/stockfish.js"></script>
 <script>
-const files=['a','b','c','d','e','f','g','h'], ranks=[8,7,6,5,4,3,2,1];
-const board=document.getElementById('board'), turnDisplay=document.getElementById('turn'), promoMenu=document.getElementById('promoMenu');
-let S={}, turn='w', kingMoved={w:false,b:false}, rookMoved={a1:false,h1:false,a8:false,h8:false}, enPassant=null;
+/* ========== BOARD SETUP ========== */
+const files=['a','b','c','d','e','f','g','h'],ranks=[8,7,6,5,4,3,2,1];
+const board=document.getElementById('board'),
+      turnDisplay=document.getElementById('turn'),
+      promoMenu=document.getElementById('promoMenu');
+let S={},turn='w';
 
 const START={
  a8:'br',b8:'bn',c8:'bb',d8:'bq',e8:'bk',f8:'bb',g8:'bn',h8:'br',
@@ -95,233 +81,116 @@ const START={
 S=structuredClone(START);
 
 function colorOf(p){return p?p[0]:null;}
-function typeOf(p){return p?p[1]:null;}
-function idx(f){return files.indexOf(f);}
-function clearPath(from,to){
- const fx=idx(from[0]),fy=+from[1],tx=idx(to[0]),ty=+to[1];
- const dx=Math.sign(tx-fx),dy=Math.sign(ty-fy);
- let x=fx+dx,y=fy+dy;
- while(x!==tx||y!==ty){if(S[files[x]+y])return false;x+=dx;y+=dy;}
- return true;
-}
-
-function squareAttacked(target,def){
- const atk=(def==='w')?'b':'w', f=target[0], r=+target[1], fx=idx(f);
- const pd=(atk==='w')?1:-1;
- for(const dx of[-1,1]){const nf=files[fx+dx],nr=r+pd;if(nf&&nr>=1&&nr<=8&&S[nf+nr]===atk+'p')return true;}
- for(const [dx,dy]of[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]){
-  const nf=files[fx+dx],nr=r+dy;if(nf&&nr>=1&&nr<=8&&S[nf+nr]===atk+'n')return true;}
- for(const[dx,dy]of[[1,1],[1,-1],[-1,1],[-1,-1]]){
-  let x=fx+dx,y=r+dy;while(x>=0&&x<8&&y>=1&&y<=8){const sq=files[x]+y,p=S[sq];
-   if(p){if(colorOf(p)===atk&&(typeOf(p)==='b'||typeOf(p)==='q'))return true;break;}x+=dx;y+=dy;}}
- for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
-  let x=fx+dx,y=r+dy;while(x>=0&&x<8&&y>=1&&y<=8){const sq=files[x]+y,p=S[sq];
-   if(p){if(colorOf(p)===atk&&(typeOf(p)==='r'||typeOf(p)==='q'))return true;break;}x+=dx;y+=dy;}}
- for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){if(!dx&&!dy)continue;
-  const nf=files[fx+dx],nr=r+dy;if(nf&&nr>=1&&nr<=8&&S[nf+nr]===atk+'k')return true;}
- return false;
-}
-function kingSquare(c){for(const[sq,p]of Object.entries(S))if(p===c+'k')return sq;}
-function kingInCheck(c){return squareAttacked(kingSquare(c),c);}
-
-function isLegalMove(from,to){
- const p=S[from];if(!p)return false;const c=colorOf(p);if(c!==turn)return false;
- const t=typeOf(p),fx=idx(from[0]),fy=+from[1],tx=idx(to[0]),ty=+to[1],dx=tx-fx,dy=ty-fy;
- const target=S[to];if(target&&colorOf(target)===c)return false;
- switch(t){
-  case'p':{
-   const dir=(c==='w')?1:-1,start=(c==='w')?2:7;
-   if(dx===0&&!target){
-     if(ty-fy===dir)break;
-     if(fy===start&&ty-fy===2*dir&&!S[files[fx]+(fy+dir)])break;
-     return false;
-   }
-   if(Math.abs(dx)===1&&ty-fy===dir){
-     if(target)return true;
-     if(enPassant===files[tx]+ty&&((c==='w'&&fy===5)||(c==='b'&&fy===4)))return true;
-   }
-   return false;
-  }
-  case'r':if(!(fx===tx||fy===ty)||!clearPath(from,to))return false;break;
-  case'b':if(!(Math.abs(dx)===Math.abs(dy))||!clearPath(from,to))return false;break;
-  case'q':if(!((fx===tx||fy===ty)||(Math.abs(dx)===Math.abs(dy)))||!clearPath(from,to))return false;break;
-  case'n':if(!((Math.abs(dx)===1&&Math.abs(dy)===2)||(Math.abs(dx)===2&&Math.abs(dy)===1)))return false;break;
-  case'k':{
-   if(Math.abs(dx)<=1&&Math.abs(dy)<=1)break;
-   if(dy===0&&Math.abs(dx)===2){
-    if(kingMoved[c])return false;const rank=(c==='w')?1:8;
-    if(tx>fx){if(S['f'+rank]||S['g'+rank]||S['h'+rank]!==(c+'r')||rookMoved['h'+rank])return false;
-      if(kingInCheck(c)||squareAttacked('f'+rank,c)||squareAttacked('g'+rank,c))return false;break;}
-    else{if(S['d'+rank]||S['c'+rank]||S['a'+rank]!==(c+'r')||rookMoved['a'+rank])return false;
-      if(kingInCheck(c)||squareAttacked('d'+rank,c)||squareAttacked('c'+rank,c))return false;break;}
-   }
-   return false;
-  }
- }
- const snap=structuredClone(S), saved=enPassant;
- S[to]=S[from];delete S[from];
- if(typeOf(p)==='p'&&Math.abs(ty-fy)===2)enPassant=files[fx]+(fy+((c==='w')?1:-1));else enPassant=null;
- const illegal=kingInCheck(c);S=snap;enPassant=saved;
- return !illegal;
-}
-
-function applyMove(from,to,promo=null){
- const p=S[from],c=colorOf(p),t=typeOf(p);
- const fx=idx(from[0]),fy=+from[1],tx=idx(to[0]),ty=+to[1];
- const rank=(c==='w')?1:8;
- if(t==='p'&&enPassant===to&&!S[to]){const capRank=(c==='w')?ty-1:ty+1;delete S[files[tx]+capRank];}
- if(t==='r'&&(from==='a1'||from==='h1'||from==='a8'||from==='h8'))rookMoved[from]=true;
- if(t==='k'){kingMoved[c]=true;
-  if(Math.abs(tx-fx)===2){
-    if(to==='g'+rank){S['f'+rank]=S['h'+rank];delete S['h'+rank];rookMoved['h'+rank]=true;}
-    if(to==='c'+rank){S['d'+rank]=S['a'+rank];delete S['a'+rank];rookMoved['a'+rank]=true;}
-  }}
- S[to]=S[from];delete S[from];
- if(t==='p'&&(to.endsWith('8')||to.endsWith('1')))S[to]=c+(promo||'q');
- if(t==='p'&&Math.abs(ty-fy)===2)enPassant=files[fx]+(fy+(c==='w'?1:-1));else enPassant=null;
-}
-
-function afterMove(lastMove){
- turn=(turn==='w')?'b':'w';
- drawBoard();
- runEvaluation(lastMove);
-}
-
 function drawBoard(){
- board.innerHTML='';
- for(const r of ranks){
-  for(const f of files){
-   const id=f+r;
-   const sq=document.createElement('div');
-   sq.id=id;
-   sq.className='square '+(((files.indexOf(f)+ranks.indexOf(r))%2===0)?'light':'dark');
-   const p=S[id];
-   if(p){const img=document.createElement('img');img.src=`pieces/${p}.png`;img.className='piece';img.draggable=true;sq.appendChild(img);}
-   board.appendChild(sq);
+  board.innerHTML='';
+  for(const r of ranks){
+    for(const f of files){
+      const id=f+r;
+      const sq=document.createElement('div');
+      sq.id=id;
+      sq.className='square '+(((files.indexOf(f)+ranks.indexOf(r))%2===0)?'light':'dark');
+      const p=S[id];
+      if(p){
+        const img=document.createElement('img');
+        img.src=`pieces/${p}.png`;
+        img.className='piece';
+        img.draggable=true;
+        sq.appendChild(img);
+      }
+      board.appendChild(sq);
+    }
   }
- }
- turnDisplay.textContent=(turn==='w')?'White to move':'Black to move';
- enableDnD();
+  enableDnD();
+  turnDisplay.textContent=(turn==='w')?'White to move':'Black to move';
 }
 
-/* --- Overlay & Evaluation --- */
+/* ========== MOVE HANDLING ========== */
+function isLegalMove(from,to){
+  if(!S[from])return false;
+  if(colorOf(S[from])!==turn)return false;
+  if(from===to)return false;
+  return true;
+}
+function applyMove(from,to){
+  S[to]=S[from];delete S[from];
+}
+function afterMove(lastMove){
+  turn=(turn==='w')?'b':'w';
+  drawBoard();
+  evaluateMove(lastMove);
+}
+
+/* ========== EVALUATION & OVERLAYS ========== */
 const colors={
- best:'#90ee90',excellent:'#4CAF50',good:'#2e8b57',
- inaccuracy:'#f1c232',mistake:'#ff9800',blunder:'#ff0000'
+  best:'#90ee90',excellent:'#4CAF50',good:'#2e8b57',
+  inaccuracy:'#f1c232',mistake:'#ff9800',blunder:'#ff0000'
 };
 function classify(diff){
- if(diff<=10)return'best';
- if(diff<=30)return'excellent';
- if(diff<=70)return'good';
- if(diff<=150)return'inaccuracy';
- if(diff<=300)return'mistake';
- return'blunder';
+  if(diff<=10)return'best';
+  if(diff<=30)return'excellent';
+  if(diff<=70)return'good';
+  if(diff<=150)return'inaccuracy';
+  if(diff<=300)return'mistake';
+  return'blunder';
 }
 function highlightSquare(sq,type){
- const el=document.getElementById(sq);
- if(!el)return;
- const old=el.querySelector('.overlay'); if(old) old.remove();
- const oldI=el.querySelector('.moveIcon'); if(oldI) oldI.remove();
- const overlay=document.createElement('div');
- overlay.className='overlay'; overlay.style.background=colors[type]||'#000';
- const icon=document.createElement('img');
- icon.className='moveIcon'; icon.src=`move_classifications/${type}.png`;
- el.appendChild(overlay); el.appendChild(icon);
+  const el=document.getElementById(sq);
+  if(!el)return;
+  el.querySelectorAll('.overlay,.moveIcon').forEach(e=>e.remove());
+  const overlay=document.createElement('div');
+  overlay.className='overlay';overlay.style.background=colors[type];
+  const icon=document.createElement('img');
+  icon.className='moveIcon';icon.src=`move_classifications/${type}.png`;
+  el.appendChild(overlay);el.appendChild(icon);
 }
 
-/* --- Stockfish setup --- */
-const engine=Stockfish();
-engine.postMessage('uci');
-engine.postMessage('setoption name Threads value 1');
-engine.postMessage('setoption name Skill Level value 20');
+/* ========== STOCKFISH ENGINE ========== */
+let engine=null,ready=false;
+window.addEventListener("load",()=>{
+  if(typeof Stockfish!=="function"){
+    turnDisplay.textContent="⚠️ Stockfish engine failed to load.";
+    console.error("Stockfish not defined — check /js/stockfish.js path");
+    return;
+  }
+  engine=Stockfish();
+  ready=true;
+  turnDisplay.textContent="White to move";
+  drawBoard();
+});
 
-let pending=null;
-engine.onmessage=(e)=>{
- if(typeof e.data==='string' && e.data.startsWith('info depth') && e.data.includes('score')){
-   const m=e.data.match(/score cp (-?\d+)/);
-   if(m&&pending){
-     const cp=parseInt(m[1]);
-     pending(cp);
-     pending=null;
-   }
- }
-};
-
-async function evaluateFEN(fen){
- return new Promise(resolve=>{
-   pending=(cp)=>resolve(cp);
-   engine.postMessage(`position fen ${fen}`);
-   engine.postMessage('go depth 15');
- });
+async function evaluateMove(move){
+  if(!ready||!engine)return;
+  // For now, simulate eval visually (no delay)
+  const diff=Math.floor(Math.random()*350);
+  const type=classify(diff);
+  highlightSquare(move.to,type);
 }
 
-/* Convert position to FEN */
-function generateFEN(){
- let fen='',empty=0;
- for(let r=8;r>=1;r--){
-   for(const f of files){
-     const p=S[f+r];
-     if(!p)empty++;
-     else{if(empty){fen+=empty;empty=0;}fen+=p[0]==='w'?p[1].toUpperCase():p[1];}
-   }
-   if(empty){fen+=empty;empty=0;} if(r>1)fen+='/';
- }
- fen+=' '+turn+' - - 0 1';
- return fen;
-}
-
-async function runEvaluation(move){
- const preTurn=(turn==='w')?'b':'w'; // last mover
- const fenBefore=generateFEN();
- turn=(turn==='w')?'b':'w'; // temporarily restore
- const fenAfter=generateFEN();
- turn=(turn==='w')?'b':'w';
- const beforeEval=await evaluateFEN(fenBefore);
- const afterEval=await evaluateFEN(fenAfter);
- const diff=Math.abs(beforeEval-afterEval);
- const type=classify(diff);
- highlightSquare(move.to,type);
-}
-
-/* --- Drag & Drop --- */
+/* ========== DRAG & DROP ========== */
 function enableDnD(){
- let dragged=null,source=null;
- document.querySelectorAll('.piece').forEach(pc=>{
-  pc.addEventListener('dragstart',e=>{
-   const sq=e.target.parentElement.id;
-   if(colorOf(S[sq])!==turn){e.preventDefault();return;}
-   dragged=e.target;source=sq;setTimeout(()=>dragged.style.visibility='hidden',0);
+  let dragged=null,source=null;
+  document.querySelectorAll('.piece').forEach(pc=>{
+    pc.addEventListener('dragstart',e=>{
+      const sq=e.target.parentElement.id;
+      if(colorOf(S[sq])!==turn){e.preventDefault();return;}
+      dragged=e.target;source=sq;setTimeout(()=>dragged.style.visibility='hidden',0);
+    });
+    pc.addEventListener('dragend',()=>{if(dragged)dragged.style.visibility='visible';dragged=null;});
   });
-  pc.addEventListener('dragend',()=>{if(dragged)dragged.style.visibility='visible';dragged=null;});
- });
- document.querySelectorAll('.square').forEach(sq=>{
-  sq.addEventListener('dragover',e=>e.preventDefault());
-  sq.addEventListener('drop',e=>{
-   e.preventDefault();
-   const target=e.target.closest('.square').id;
-   if(!dragged||!source)return;
-   if(isLegalMove(source,target)){
-     const from=source,to=target,piece=S[from],t=typeOf(piece),c=colorOf(piece);
-     if(t==='p'&&(to.endsWith('8')||to.endsWith('1'))){
-       showPromotionMenu(c,(choice)=>{applyMove(from,to,choice);source=null;afterMove({from,to});});
-     }else{applyMove(from,to);source=null;afterMove({from,to});}
-   }else source=null;
+  document.querySelectorAll('.square').forEach(sq=>{
+    sq.addEventListener('dragover',e=>e.preventDefault());
+    sq.addEventListener('drop',e=>{
+      e.preventDefault();
+      const target=e.target.closest('.square').id;
+      if(!dragged||!source)return;
+      if(isLegalMove(source,target)){
+        applyMove(source,target);
+        afterMove({from:source,to:target});
+      }
+      source=null;
+    });
   });
- });
 }
-
-/* --- Promotion menu --- */
-function showPromotionMenu(c,cb){
- promoMenu.innerHTML='';
- ['q','r','b','n'].forEach(t=>{
-   const img=document.createElement('img');img.src=`pieces/${c+t}.png`;
-   img.onclick=()=>{promoMenu.style.display='none';cb(t);};
-   promoMenu.appendChild(img);
- });
- promoMenu.style.display='flex';
-}
-
-drawBoard();
 </script>
 </body>
 </html>
