@@ -2,19 +2,19 @@
 let game = new Chess();
 const board = document.getElementById("board");
 const turnDisplay = document.getElementById("turn");
-let engine, ready=false, lastEval=0, analyzing=false;
+let engine, ready=false, analyzing=false;
 
 const evalColors={
   best:"#90ee90",excellent:"#4caf50",good:"#2e8b57",
   inaccuracy:"#ffe700",mistake:"#ff9800",blunder:"#ff0000"
 };
-function classify(diff){
-  diff=Math.abs(diff);
-  if(diff<=15)return"best";
-  if(diff<=40)return"excellent";
-  if(diff<=100)return"good";
-  if(diff<=200)return"inaccuracy";
-  if(diff<=400)return"mistake";
+function classify(loss){
+  loss=Math.abs(loss);
+  if(loss<20)return"best";
+  if(loss<60)return"excellent";
+  if(loss<120)return"good";
+  if(loss<250)return"inaccuracy";
+  if(loss<500)return"mistake";
   return"blunder";
 }
 
@@ -78,19 +78,22 @@ function enableDragDrop(){
   });
 }
 
-async function getEval(fen){
+/* ---- Stockfish interaction ---- */
+
+function getEval(fen){
   return new Promise(resolve=>{
-    let result=null;
+    let score=null;
     const handler=e=>{
       const msg=e.data;
       if(typeof msg!=="string")return;
       if(msg.includes("score cp")){
-        const m=msg.match(/cp (-?\d+)/);
-        if(m){result=parseInt(m[1]);}
+        const m=msg.match(/score cp (-?\d+)/);
+        if(m)score=parseInt(m[1]);
       }
-      if(msg.includes("bestmove")){
+      if(msg.includes("mate")) score=score??0; // ignore mates for now
+      if(msg.startsWith("bestmove")){
         engine.removeEventListener("message",handler);
-        resolve(result);
+        resolve(score);
       }
     };
     engine.addEventListener("message",handler);
@@ -102,25 +105,34 @@ async function getEval(fen){
 async function evaluateMove(move){
   if(!ready||!engine||analyzing)return;
   analyzing=true;
-  const newFen=game.fen();
-  const newEval=await getEval(newFen);
-  if(newEval===null){analyzing=false;return;}
-  const diff=newEval-lastEval;
-  const type=classify(diff);
+
+  // 1️⃣ Save FEN before the move
+  const fenBefore = game.fen(); 
+  game.undo(); // temporarily go back
+  const fenPrevious = game.fen();
+  game.move(move); // restore position
+
+  // 2️⃣ Evaluate previous and new positions
+  const evalBefore = await getEval(fenPrevious);
+  const evalAfter  = await getEval(fenBefore);
+
+  // 3️⃣ Compare and classify
+  let loss = 0;
+  if(evalBefore!=null && evalAfter!=null){
+    const turn = move.color==='w'?1:-1; // perspective
+    loss = (evalBefore - evalAfter)*turn;
+  }
+  const type = classify(loss);
   highlightSquare(move.to,type);
-  lastEval=newEval;
   analyzing=false;
 }
 
-window.addEventListener("load",async()=>{
+window.addEventListener("load",()=>{
   try{
     engine=new Worker("./js/stockfish.js");
     ready=true;
     console.log("Stockfish ready");
     drawBoard();
-    // get initial evaluation
-    lastEval = await getEval(game.fen());
-    console.log("Initial eval:", lastEval);
   }catch(err){
     console.error("Stockfish load failed",err);
     turnDisplay.textContent="⚠️ Engine failed to start";
