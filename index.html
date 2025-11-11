@@ -1,26 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlienGamer Chess Review</title>
+<style>
+  body {
+    background: #1a1a1a;
+    color: white;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 80px);
+    grid-template-rows: repeat(8, 80px);
+    width: 640px;
+    height: 640px;
+    margin: 20px auto;
+    border: 4px solid #333;
+  }
+  .square {
+    width: 80px;
+    height: 80px;
+    position: relative;
+  }
+  .light { background: #f0d9b5; }
+  .dark { background: #b58863; }
+  .piece {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    user-select: none;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    opacity: 0.35;
+    border-radius: 0;
+  }
+  .moveIcon {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 24px;
+    height: 24px;
+    z-index: 5;
+  }
+  #turn {
+    font-size: 22px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+<h2>♟ AlienGamer Chess Review</h2>
+<div id="board"></div>
+<div id="turn"></div>
+
+<script src="./js/chess.js"></script>
 <script>
 let game = new Chess();
 const board = document.getElementById("board");
 const turnDisplay = document.getElementById("turn");
 let engine, ready=false, analyzing=false;
 
-const evalColors={
-  best:"#90ee90",excellent:"#4caf50",good:"#2e8b57",
-  inaccuracy:"#ffe700",mistake:"#ff9800",blunder:"#ff0000"
+// --- Colors for classifications ---
+const evalColors = {
+  best:"#90ee90",       // light green
+  excellent:"#4caf50",  // green
+  good:"#2e8b57",       // dark green
+  inaccuracy:"#ffe700", // yellow
+  mistake:"#ff9800",    // orange
+  blunder:"#ff0000"     // red
 };
+
+// --- Classification logic (based on centipawn loss) ---
 function classify(loss){
-  loss=Math.abs(loss);
-  if(loss<20)return"best";
-  if(loss<60)return"excellent";
-  if(loss<120)return"good";
-  if(loss<250)return"inaccuracy";
-  if(loss<500)return"mistake";
-  return"blunder";
+  const cp = Math.abs(loss);
+  if(cp < 20) return "best";
+  if(cp < 60) return "excellent";
+  if(cp < 120) return "good";
+  if(cp < 250) return "inaccuracy";
+  if(cp < 500) return "mistake";
+  return "blunder";
 }
 
+// --- Draw the chessboard ---
 function drawBoard(){
-  board.innerHTML="";
-  const ranks=[8,7,6,5,4,3,2,1],files=["a","b","c","d","e","f","g","h"];
+  board.innerHTML = "";
+  const ranks=[8,7,6,5,4,3,2,1];
+  const files=["a","b","c","d","e","f","g","h"];
   for(const r of ranks){
     for(const f of files){
       const id=f+r;
@@ -38,13 +108,14 @@ function drawBoard(){
       board.appendChild(sq);
     }
   }
-  turnDisplay.textContent=(game.turn()==="w")?"White to move":"Black to move";
+  turnDisplay.textContent = (game.turn()==="w") ? "White to move" : "Black to move";
   enableDragDrop();
 }
 
+// --- Highlight move classification ---
 function highlightSquare(sq,type){
   const el=document.getElementById(sq);
-  if(!el)return;
+  if(!el) return;
   el.querySelectorAll(".overlay,.moveIcon").forEach(e=>e.remove());
   const ov=document.createElement("div");
   ov.className="overlay";
@@ -55,6 +126,7 @@ function highlightSquare(sq,type){
   el.append(ov,icon);
 }
 
+// --- Drag-drop moves ---
 function enableDragDrop(){
   let dragged=null,source=null;
   document.querySelectorAll(".piece").forEach(p=>{
@@ -67,30 +139,31 @@ function enableDragDrop(){
   });
   document.querySelectorAll(".square").forEach(sq=>{
     sq.addEventListener("dragover",e=>e.preventDefault());
-    sq.addEventListener("drop",e=>{
+    sq.addEventListener("drop",async e=>{
       e.preventDefault();
       const target=e.target.closest(".square").id;
-      if(!source)return;
+      if(!source) return;
       const move=game.move({from:source,to:target,promotion:"q"});
-      if(move){drawBoard();evaluateMove(move);}
+      if(move){
+        drawBoard();
+        await evaluateMove(move);
+      }
       source=null;
     });
   });
 }
 
-/* ---- Stockfish interaction ---- */
-
+// --- Query Stockfish for eval ---
 function getEval(fen){
   return new Promise(resolve=>{
     let score=null;
     const handler=e=>{
       const msg=e.data;
-      if(typeof msg!=="string")return;
+      if(typeof msg!=="string") return;
       if(msg.includes("score cp")){
         const m=msg.match(/score cp (-?\d+)/);
-        if(m)score=parseInt(m[1]);
+        if(m) score=parseInt(m[1]);
       }
-      if(msg.includes("mate")) score=score??0; // ignore mates for now
       if(msg.startsWith("bestmove")){
         engine.removeEventListener("message",handler);
         resolve(score);
@@ -102,40 +175,52 @@ function getEval(fen){
   });
 }
 
+// --- Evaluate a move using Stockfish difference ---
 async function evaluateMove(move){
-  if(!ready||!engine||analyzing)return;
-  analyzing=true;
+  if(!ready||!engine||analyzing) return;
+  analyzing = true;
 
-  // 1️⃣ Save FEN before the move
-  const fenBefore = game.fen(); 
-  game.undo(); // temporarily go back
-  const fenPrevious = game.fen();
-  game.move(move); // restore position
+  // Store position before and after move
+  const fenAfter = game.fen();
+  game.undo();
+  const fenBefore = game.fen();
+  game.move(move);
 
-  // 2️⃣ Evaluate previous and new positions
-  const evalBefore = await getEval(fenPrevious);
-  const evalAfter  = await getEval(fenBefore);
+  // Evaluate both
+  const evalBefore = await getEval(fenBefore);
+  const evalAfter = await getEval(fenAfter);
 
-  // 3️⃣ Compare and classify
-  let loss = 0;
-  if(evalBefore!=null && evalAfter!=null){
-    const turn = move.color==='w'?1:-1; // perspective
-    loss = (evalBefore - evalAfter)*turn;
+  if(evalBefore == null || evalAfter == null){
+    analyzing=false;
+    return;
   }
+
+  // Flip evalAfter since it's from opponent's POV
+  if(game.turn() !== move.color) evalAfter = -evalAfter;
+
+  // Compute the loss from player's perspective
+  const loss = evalBefore - evalAfter;
+
+  // Classify move
   const type = classify(loss);
-  highlightSquare(move.to,type);
-  analyzing=false;
+  console.log(`${move.color === 'w' ? 'White' : 'Black'} move ${move.san}: Δ${loss} (${type})`);
+  highlightSquare(move.to, type);
+
+  analyzing = false;
 }
 
+// --- Initialize ---
 window.addEventListener("load",()=>{
   try{
-    engine=new Worker("./js/stockfish.js");
-    ready=true;
-    console.log("Stockfish ready");
+    engine = new Worker("./js/stockfish.js");
+    ready = true;
+    console.log("Stockfish engine loaded ✅");
     drawBoard();
   }catch(err){
-    console.error("Stockfish load failed",err);
+    console.error("❌ Stockfish load failed", err);
     turnDisplay.textContent="⚠️ Engine failed to start";
   }
 });
 </script>
+</body>
+</html>
