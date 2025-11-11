@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AlienGamer Chess</title>
 <style>
   body {
     background: #222;
+    color: white;
     display: flex;
     flex-direction: column;
     align-items: center;
-    color: white;
     font-family: sans-serif;
   }
+
   #board {
     display: grid;
     grid-template-columns: repeat(8, 80px);
@@ -20,28 +21,35 @@
     border: 4px solid #333;
     margin-top: 20px;
   }
+
   .square {
     width: 80px;
     height: 80px;
     position: relative;
   }
+
   .light { background: #f0d9b5; }
   .dark { background: #b58863; }
+
   .piece {
     width: 80px;
     height: 80px;
     cursor: grab;
   }
+
   .highlight {
     outline: 3px solid yellow;
   }
+
   .eval-icon {
     position: absolute;
     top: 2px;
     right: 2px;
     width: 22px;
     height: 22px;
+    z-index: 2;
   }
+
   .overlay {
     position: absolute;
     inset: 0;
@@ -54,13 +62,9 @@
 <h2 id="turn">Loading...</h2>
 <div id="board"></div>
 
-<!-- Chess + Stockfish -->
-<script src="./js/chess.js"></script>
-<script>
-if (typeof Chess === "undefined") {
-  alert("❌ chess.js not found or invalid! Make sure it's the browser version.");
-}
-</script>
+<!-- ✅ Correct browser version of Chess.js -->
+<script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/chess.min.js"></script>
+
 <script>
 const PIECE_PATH = "pieces/";
 const CLASS_PATH = "move_classifications/";
@@ -97,6 +101,7 @@ function drawBoard() {
   }
   turnEl.textContent = game.turn() === "w" ? "White to move" : "Black to move";
 }
+
 drawBoard();
 
 board.addEventListener("click", async (e)=>{
