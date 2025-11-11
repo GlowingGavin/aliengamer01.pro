@@ -62,9 +62,68 @@
 <h2 id="turn">Loading...</h2>
 <div id="board"></div>
 
-<!-- ✅ Correct browser version of Chess.js -->
-<script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/chess.min.js"></script>
+<!-- ✅ Embedded browser-safe chess.js -->
+<script>
+/*! Minimal browser Chess.js (no exports, no modules) */
+(function (root, factory) {
+  root.Chess = factory();
+})(this, function () {
+  var WHITE = "w", BLACK = "b";
+  var DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+  function Chess(fen) {
+    if (!fen) fen = DEFAULT_FEN;
+    var board = new Map();
+    var turn = fen.split(" ")[1] || "w";
+    var history = [];
+
+    const files = "abcdefgh";
+    const ranks = "87654321";
+    const parseFen = () => {
+      board.clear();
+      const [rows] = fen.split(" ");
+      const r = rows.split("/");
+      for (let i = 0; i < 8; i++) {
+        let f = 0;
+        for (const c of r[i]) {
+          if (isNaN(c)) {
+            const square = files[f] + ranks[i];
+            board.set(square, { type: c.toLowerCase(), color: c === c.toLowerCase() ? "b" : "w" });
+            f++;
+          } else f += +c;
+        }
+      }
+    };
+    parseFen();
+
+    const move = (m) => {
+      const p = board.get(m.from);
+      if (!p || p.color !== turn) return null;
+      const dest = board.get(m.to);
+      if (dest && dest.color === p.color) return null;
+      board.delete(m.from);
+      board.set(m.to, p);
+      turn = turn === "w" ? "b" : "w";
+      history.push(m);
+      return m;
+    };
+    const undo = () => {
+      const m = history.pop();
+      if (!m) return;
+      parseFen();
+      for (const mv of history) move(mv);
+      return m;
+    };
+    const get = (sq) => board.get(sq);
+    const fenStr = () => fen;
+    const turnFn = () => turn;
+    return { move, undo, get, fen: fenStr, turn: turnFn };
+  }
+  return Chess;
+});
+</script>
+
+<!-- ✅ Your Stockfish + Game Logic -->
 <script>
 const PIECE_PATH = "pieces/";
 const CLASS_PATH = "move_classifications/";
@@ -101,7 +160,6 @@ function drawBoard() {
   }
   turnEl.textContent = game.turn() === "w" ? "White to move" : "Black to move";
 }
-
 drawBoard();
 
 board.addEventListener("click", async (e)=>{
@@ -186,7 +244,7 @@ async function evaluateMove(move){
   const loss = evalBefore - evalAfterFlipped;
   const type = classify(loss);
   highlightSquare(move.to, type);
-  console.log(`Move ${move.san} loss=${(loss/100).toFixed(2)} → ${type}`);
+  console.log(`Move ${move.san || move.from+move.to} loss=${(loss/100).toFixed(2)} → ${type}`);
   analyzing=false;
 }
 
