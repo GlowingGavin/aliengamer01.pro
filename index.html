@@ -1,43 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AlienGamer Chess — Legal & Analyzed</title>
-
-<!-- ✅ Local libraries -->
-<script src="./js/chess.js"></script>  <!-- local chess.js -->
-<style>
-body{
-  background:#111;color:#fff;font-family:Arial;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;margin:0;
-}
-#board{
-  display:grid;
-  grid-template-columns:repeat(8,80px);
-  grid-template-rows:repeat(8,80px);
-  border:4px solid #000;
-}
-.square{width:80px;height:80px;display:flex;justify-content:center;align-items:center;position:relative;}
-.light{background:#f0d9b5;} .dark{background:#b58863;}
-.piece{width:72px;height:72px;cursor:grab;}
-.overlay{position:absolute;top:0;left:0;width:100%;height:100%;opacity:.5;border-radius:2px;z-index:1;}
-.moveIcon{position:absolute;top:2px;right:2px;width:28px;height:28px;z-index:2;pointer-events:none;}
-#turn{margin-top:10px;font-size:1.3rem;}
-</style>
-</head>
-<body>
-<div id="board"></div>
-<div id="turn">Loading engine…</div>
-
 <script>
 let game = new Chess();
 const board = document.getElementById("board");
 const turnDisplay = document.getElementById("turn");
-let engine, ready=false, lastEval=0;
+let engine, ready=false, lastEval=0, analyzing=false;
 
-// classification colors
 const evalColors={
   best:"#90ee90",excellent:"#4caf50",good:"#2e8b57",
   inaccuracy:"#ffe700",mistake:"#ff9800",blunder:"#ff0000"
@@ -57,19 +23,19 @@ function drawBoard(){
   const ranks=[8,7,6,5,4,3,2,1],files=["a","b","c","d","e","f","g","h"];
   for(const r of ranks){
     for(const f of files){
-      const sqId=f+r;
-      const div=document.createElement("div");
-      div.id=sqId;
-      div.className="square "+(((files.indexOf(f)+ranks.indexOf(r))%2===0?"light":"dark"));
-      const piece=game.get(sqId);
+      const id=f+r;
+      const sq=document.createElement("div");
+      sq.id=id;
+      sq.className="square "+(((files.indexOf(f)+ranks.indexOf(r))%2===0?"light":"dark"));
+      const piece=game.get(id);
       if(piece){
         const img=document.createElement("img");
         img.src=`pieces/${piece.color}${piece.type}.png`;
         img.className="piece";
         img.draggable=true;
-        div.appendChild(img);
+        sq.appendChild(img);
       }
-      board.appendChild(div);
+      board.appendChild(sq);
     }
   }
   turnDisplay.textContent=(game.turn()==="w")?"White to move":"Black to move";
@@ -106,43 +72,58 @@ function enableDragDrop(){
       const target=e.target.closest(".square").id;
       if(!source)return;
       const move=game.move({from:source,to:target,promotion:"q"});
-      if(move){drawBoard();analyzeMove(move);}
+      if(move){drawBoard();evaluateMove(move);}
       source=null;
     });
   });
 }
 
-function analyzeMove(move){
-  if(!ready||!engine)return;
-  const fen=game.fen();
-  engine.onmessage=e=>{
-    const msg=e.data;
-    if(typeof msg!=="string")return;
-    if(msg.includes("score cp")){
-      const m=msg.match(/cp (-?\d+)/);
-      if(!m)return;
-      const evalScore=parseInt(m[1]);
-      const diff=evalScore-lastEval;
-      lastEval=evalScore;
-      const type=classify(diff);
-      highlightSquare(move.to,type);
-    }
-  };
-  engine.postMessage("position fen "+fen);
-  engine.postMessage("go depth 12");
+async function getEval(fen){
+  return new Promise(resolve=>{
+    let result=null;
+    const handler=e=>{
+      const msg=e.data;
+      if(typeof msg!=="string")return;
+      if(msg.includes("score cp")){
+        const m=msg.match(/cp (-?\d+)/);
+        if(m){result=parseInt(m[1]);}
+      }
+      if(msg.includes("bestmove")){
+        engine.removeEventListener("message",handler);
+        resolve(result);
+      }
+    };
+    engine.addEventListener("message",handler);
+    engine.postMessage("position fen "+fen);
+    engine.postMessage("go depth 12");
+  });
 }
 
-window.addEventListener("load",()=>{
+async function evaluateMove(move){
+  if(!ready||!engine||analyzing)return;
+  analyzing=true;
+  const newFen=game.fen();
+  const newEval=await getEval(newFen);
+  if(newEval===null){analyzing=false;return;}
+  const diff=newEval-lastEval;
+  const type=classify(diff);
+  highlightSquare(move.to,type);
+  lastEval=newEval;
+  analyzing=false;
+}
+
+window.addEventListener("load",async()=>{
   try{
     engine=new Worker("./js/stockfish.js");
     ready=true;
     console.log("Stockfish ready");
     drawBoard();
+    // get initial evaluation
+    lastEval = await getEval(game.fen());
+    console.log("Initial eval:", lastEval);
   }catch(err){
     console.error("Stockfish load failed",err);
     turnDisplay.textContent="⚠️ Engine failed to start";
   }
 });
 </script>
-</body>
-</html>
