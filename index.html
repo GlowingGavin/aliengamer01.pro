@@ -2,55 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AlienGamer Chess Review</title>
 <style>
-  body {
-    background: #1a1a1a;
-    color: white;
-    font-family: sans-serif;
-    text-align: center;
-  }
-  #board {
-    display: grid;
-    grid-template-columns: repeat(8, 80px);
-    grid-template-rows: repeat(8, 80px);
-    width: 640px;
-    height: 640px;
-    margin: 20px auto;
-    border: 4px solid #333;
-  }
-  .square {
-    width: 80px;
-    height: 80px;
-    position: relative;
-  }
-  .light { background: #f0d9b5; }
-  .dark { background: #b58863; }
-  .piece {
-    width: 100%;
-    height: 100%;
-    cursor: grab;
-    user-select: none;
-  }
-  .overlay {
-    position: absolute;
-    inset: 0;
-    opacity: 0.35;
-    border-radius: 0;
-  }
-  .moveIcon {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 24px;
-    height: 24px;
-    z-index: 5;
-  }
-  #turn {
-    font-size: 22px;
-    margin-top: 10px;
-  }
+  body{background:#1a1a1a;color:#fff;font-family:sans-serif;text-align:center}
+  #board{display:grid;grid-template-columns:repeat(8,80px);grid-template-rows:repeat(8,80px);
+    width:640px;height:640px;margin:20px auto;border:4px solid #333}
+  .square{width:80px;height:80px;position:relative}
+  .light{background:#f0d9b5}.dark{background:#b58863}
+  .piece{width:100%;height:100%;cursor:grab;user-select:none}
+  .overlay{position:absolute;inset:0;opacity:.35}
+  .moveIcon{position:absolute;top:2px;right:2px;width:24px;height:24px;z-index:5}
+  #turn{font-size:22px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -60,37 +23,84 @@
 
 <script src="./js/chess.js"></script>
 <script>
+// === Global state ===
 let game = new Chess();
 const board = document.getElementById("board");
 const turnDisplay = document.getElementById("turn");
-let engine, ready=false, analyzing=false;
+let engine, Engine, ready=false;
 
-// --- Colors for classifications ---
-const evalColors = {
-  best:"#90ee90",       // light green
-  excellent:"#4caf50",  // green
-  good:"#2e8b57",       // dark green
-  inaccuracy:"#ffe700", // yellow
-  mistake:"#ff9800",    // orange
-  blunder:"#ff0000"     // red
+// === Color map ===
+const evalColors={
+  best:"#90ee90",excellent:"#4caf50",good:"#2e8b57",
+  inaccuracy:"#ffe700",mistake:"#ff9800",blunder:"#ff0000"
 };
-
-// --- Classification logic (based on centipawn loss) ---
-function classify(loss){
-  const cp = Math.abs(loss);
-  if(cp < 20) return "best";
-  if(cp < 60) return "excellent";
-  if(cp < 120) return "good";
-  if(cp < 250) return "inaccuracy";
-  if(cp < 500) return "mistake";
-  return "blunder";
+function classifyCPL(cpl){
+  const cp=Math.max(0,Math.abs(cpl));
+  if(cp<20)return"best";
+  if(cp<60)return"excellent";
+  if(cp<120)return"good";
+  if(cp<250)return"inaccuracy";
+  if(cp<500)return"mistake";
+  return"blunder";
 }
 
-// --- Draw the chessboard ---
+// === Engine wrapper with queue ===
+function makeEngine(worker){
+  let pending=Promise.resolve();
+  const send=(lines)=>{
+    pending=pending.then(()=>new Promise(resolve=>{
+      let score=null;
+      const onMsg=e=>{
+        const msg=e.data;
+        if(typeof msg!=="string")return;
+        if(/score (cp|mate)/.test(msg)){
+          const mMate=msg.match(/score mate (-?\d+)/);
+          const mCp=msg.match(/score cp (-?\d+)/);
+          if(mMate){
+            const n=parseInt(mMate[1],10);
+            score=n>0?100000:-100000;
+          }else if(mCp){
+            score=parseInt(mCp[1],10);
+          }
+        }
+        if(msg.startsWith("bestmove")){
+          worker.removeEventListener("message",onMsg);
+          resolve(score);
+        }
+      };
+      worker.addEventListener("message",onMsg);
+      for(const l of lines)worker.postMessage(l);
+    }));
+    return pending;
+  };
+  const init=async()=>{
+    await send(["uci"]);await send(["isready"]);
+    await send(["setoption name Threads value 1"]);
+    await send(["setoption name Hash value 32"]);
+    await send(["setoption name UCI_AnalyseMode value true"]);
+    await send(["isready"]);
+  };
+  return{send,init};
+}
+
+// === Utility ===
+function moveToUci(m){return m.from+m.to+(m.promotion?m.promotion:"");}
+async function evalAt(fen,depth,forced=null){
+  const lines=["position fen "+fen,
+    forced?`go depth ${depth} searchmoves ${forced}`:`go depth ${depth}`];
+  return await Engine.send(lines);
+}
+async function cplForMove(fenPrev,uciMove,depth=12){
+  const best=await evalAt(fenPrev,depth);
+  const yours=await evalAt(fenPrev,depth,uciMove);
+  if(best==null||yours==null)return null;
+  return best - yours;
+}
+
+// === Drawing ===
 function drawBoard(){
-  board.innerHTML = "";
-  const ranks=[8,7,6,5,4,3,2,1];
-  const files=["a","b","c","d","e","f","g","h"];
+  board.innerHTML="";
+  const ranks=[8,7,6,5,4,3,2,1],files=["a","b","c","d","e","f","g","h"];
   for(const r of ranks){
     for(const f of files){
       const id=f+r;
@@ -108,14 +118,14 @@ function drawBoard(){
       board.appendChild(sq);
     }
   }
-  turnDisplay.textContent = (game.turn()==="w") ? "White to move" : "Black to move";
+  turnDisplay.textContent=(game.turn()==="w")?"White to move":"Black to move";
   enableDragDrop();
 }
 
-// --- Highlight move classification ---
+// === Highlight square ===
 function highlightSquare(sq,type){
   const el=document.getElementById(sq);
-  if(!el) return;
+  if(!el)return;
   el.querySelectorAll(".overlay,.moveIcon").forEach(e=>e.remove());
   const ov=document.createElement("div");
   ov.className="overlay";
@@ -126,7 +136,7 @@ function highlightSquare(sq,type){
   el.append(ov,icon);
 }
 
-// --- Drag-drop moves ---
+// === Drag/drop ===
 function enableDragDrop(){
   let dragged=null,source=null;
   document.querySelectorAll(".piece").forEach(p=>{
@@ -142,82 +152,35 @@ function enableDragDrop(){
     sq.addEventListener("drop",async e=>{
       e.preventDefault();
       const target=e.target.closest(".square").id;
-      if(!source) return;
+      if(!source)return;
+      const fenPrev=game.fen();
       const move=game.move({from:source,to:target,promotion:"q"});
       if(move){
         drawBoard();
-        await evaluateMove(move);
+        const uci=moveToUci(move);
+        const cpl=await cplForMove(fenPrev,uci,12);
+        if(cpl!=null){
+          const label=classifyCPL(cpl);
+          console.log(`${move.color==='w'?'White':'Black'} ${move.san} → CPL ${cpl} → ${label}`);
+          highlightSquare(move.to,label);
+        }
       }
       source=null;
     });
   });
 }
 
-// --- Query Stockfish for eval ---
-function getEval(fen){
-  return new Promise(resolve=>{
-    let score=null;
-    const handler=e=>{
-      const msg=e.data;
-      if(typeof msg!=="string") return;
-      if(msg.includes("score cp")){
-        const m=msg.match(/score cp (-?\d+)/);
-        if(m) score=parseInt(m[1]);
-      }
-      if(msg.startsWith("bestmove")){
-        engine.removeEventListener("message",handler);
-        resolve(score);
-      }
-    };
-    engine.addEventListener("message",handler);
-    engine.postMessage("position fen "+fen);
-    engine.postMessage("go depth 12");
-  });
-}
-
-// --- Evaluate a move using Stockfish difference ---
-async function evaluateMove(move){
-  if(!ready||!engine||analyzing) return;
-  analyzing = true;
-
-  // Store position before and after move
-  const fenAfter = game.fen();
-  game.undo();
-  const fenBefore = game.fen();
-  game.move(move);
-
-  // Evaluate both
-  const evalBefore = await getEval(fenBefore);
-  const evalAfter = await getEval(fenAfter);
-
-  if(evalBefore == null || evalAfter == null){
-    analyzing=false;
-    return;
-  }
-
-  // Flip evalAfter since it's from opponent's POV
-  if(game.turn() !== move.color) evalAfter = -evalAfter;
-
-  // Compute the loss from player's perspective
-  const loss = evalBefore - evalAfter;
-
-  // Classify move
-  const type = classify(loss);
-  console.log(`${move.color === 'w' ? 'White' : 'Black'} move ${move.san}: Δ${loss} (${type})`);
-  highlightSquare(move.to, type);
-
-  analyzing = false;
-}
-
-// --- Initialize ---
-window.addEventListener("load",()=>{
+// === Init ===
+window.addEventListener("load",async()=>{
   try{
-    engine = new Worker("./js/stockfish.js");
-    ready = true;
-    console.log("Stockfish engine loaded ✅");
+    engine=new Worker("./js/stockfish.js");
+    Engine=makeEngine(engine);
+    await Engine.init();
+    ready=true;
+    console.log("Stockfish ready ✅");
     drawBoard();
   }catch(err){
-    console.error("❌ Stockfish load failed", err);
+    console.error("❌ Engine init failed",err);
     turnDisplay.textContent="⚠️ Engine failed to start";
   }
 });
