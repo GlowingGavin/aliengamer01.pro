@@ -1,314 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlienGamer Chess</title>
 <style>
   body {
-    background-color: #111;
-    color: #fff;
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
+    background-color: #111; color: #fff; font-family: Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; margin: 0;
   }
   #board {
     display: grid;
     grid-template-columns: repeat(8, 80px);
     grid-template-rows: repeat(8, 80px);
     border: 4px solid #000;
-    box-shadow: 0 0 15px #0ff;
     margin-bottom: 20px;
   }
   .square {
-    width: 80px;
-    height: 80px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    width: 80px; height: 80px;
+    display: flex; justify-content: center; align-items: center;
     user-select: none;
   }
   .light { background: #f0d9b5; }
-  .dark { background: #b58863; }
-  .piece {
-    width: 72px;
-    height: 72px;
-    cursor: grab;
-  }
-  #turn {
-    font-size: 1.3rem;
-    letter-spacing: 1px;
-  }
+  .dark  { background: #b58863; }
+  .piece { width: 72px; height: 72px; cursor: grab; }
+  #turn { font-size: 1.3rem; letter-spacing: 1px; }
+
   /* Promotion menu */
   #promoMenu {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: #222;
-    padding: 15px;
-    border: 2px solid #0ff;
-    border-radius: 10px;
-    display: none;
-    gap: 10px;
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #222; padding: 16px; border: 2px solid #0ff; border-radius: 10px;
+    display: none; gap: 10px; z-index: 9999;
   }
   #promoMenu img {
-    width: 60px;
-    height: 60px;
-    cursor: pointer;
-    border: 2px solid transparent;
-    border-radius: 6px;
+    width: 60px; height: 60px; cursor: pointer;
+    border: 2px solid transparent; border-radius: 6px;
   }
-  #promoMenu img:hover {
-    border-color: #0ff;
-  }
+  #promoMenu img:hover { border-color: #0ff; }
 </style>
 </head>
 <body>
   <div id="board"></div>
   <div id="turn">White to move</div>
-
-  <!-- Promotion selection popup -->
   <div id="promoMenu"></div>
 
 <script>
-const files = ['a','b','c','d','e','f','g','h'];
-const ranks = [8,7,6,5,4,3,2,1];
-const board = document.getElementById('board');
-const turnDisplay = document.getElementById('turn');
-const promoMenu = document.getElementById('promoMenu');
+const files=['a','b','c','d','e','f','g','h'];
+const ranks=[8,7,6,5,4,3,2,1];
+const board=document.getElementById('board');
+const turnDisplay=document.getElementById('turn');
+const promoMenu=document.getElementById('promoMenu');
 
-let startPos = {
+const START={
   a8:'br',b8:'bn',c8:'bb',d8:'bq',e8:'bk',f8:'bb',g8:'bn',h8:'br',
   a7:'bp',b7:'bp',c7:'bp',d7:'bp',e7:'bp',f7:'bp',g7:'bp',h7:'bp',
   a2:'wp',b2:'wp',c2:'wp',d2:'wp',e2:'wp',f2:'wp',g2:'wp',h2:'wp',
   a1:'wr',b1:'wn',c1:'wb',d1:'wq',e1:'wk',f1:'wb',g1:'wn',h1:'wr'
 };
 
-let S = structuredClone(startPos);
-let turn = 'w';
-let kingMoved = { w:false, b:false };
-let rookMoved = { a1:false,h1:false,a8:false,h8:false };
+let S=structuredClone(START);
+let turn='w';
+let kingMoved={w:false,b:false};
+let rookMoved={a1:false,h1:false,a8:false,h8:false};
 
-function drawBoard() {
-  board.innerHTML = '';
-  for (let r of ranks) {
-    for (let f of files) {
-      const id = f + r;
-      const sq = document.createElement('div');
-      sq.classList.add('square');
-      if ((files.indexOf(f) + ranks.indexOf(r)) % 2 === 0) sq.classList.add('light');
-      else sq.classList.add('dark');
-      sq.id = id;
-      const piece = S[id];
-      if (piece) {
-        const img = document.createElement('img');
-        img.src = `pieces/${piece}.png`;
-        img.classList.add('piece');
-        img.draggable = true;
+function drawBoard(){
+  board.innerHTML='';
+  for(const r of ranks){
+    for(const f of files){
+      const id=f+r;
+      const sq=document.createElement('div');
+      sq.id=id;
+      sq.className='square '+(((files.indexOf(f)+ranks.indexOf(r))%2===0)?'light':'dark');
+      const p=S[id];
+      if(p){
+        const img=document.createElement('img');
+        img.className='piece'; img.draggable=true; img.src=`pieces/${p}.png`;
         sq.appendChild(img);
       }
       board.appendChild(sq);
     }
   }
-  turnDisplay.textContent = (turn === 'w') ? 'White to move' : 'Black to move';
-  enableDragAndDrop();
+  turnDisplay.textContent=(turn==='w')?'White to move':'Black to move';
+  enableDnD();
 }
 
-function colorOf(p){ return p ? p[0] : null; }
-function typeOf(p){ return p ? p[1] : null; }
-function index(f){ return files.indexOf(f); }
+function colorOf(p){return p?p[0]:null;}
+function typeOf(p){return p?p[1]:null;}
+function idx(f){return files.indexOf(f);}
 
 function clearPath(from,to){
-  const fx=index(from[0]), fy=+from[1];
-  const tx=index(to[0]), ty=+to[1];
+  const fx=idx(from[0]), fy=+from[1], tx=idx(to[0]), ty=+to[1];
   const dx=Math.sign(tx-fx), dy=Math.sign(ty-fy);
   let x=fx+dx, y=fy+dy;
-  while(x!==tx || y!==ty){
+  while(x!==tx||y!==ty){
     if(S[files[x]+y]) return false;
     x+=dx; y+=dy;
   }
   return true;
 }
 
-function squareAttacked(target, defenderColor){
-  const attacker = defenderColor==='w'?'b':'w';
-  const f=target[0], r=+target[1], fx=index(f);
-  // Pawn attacks
-  const pd = attacker==='w'?1:-1;
-  for(let dx of [-1,1]){
+function squareAttacked(target,defender){
+  const atk=(defender==='w')?'b':'w';
+  const f=target[0], r=+target[1], fx=idx(f);
+
+  // pawns
+  const pd=(atk==='w')?1:-1;
+  for(const dx of [-1,1]){
     const nf=files[fx+dx], nr=r+pd;
-    if(nf && nr>=1 && nr<=8 && S[nf+nr]===attacker+'p') return true;
+    if(nf&&nr>=1&&nr<=8 && S[nf+nr]===atk+'p') return true;
   }
-  // Knight
+  // knights
   for(const [dx,dy] of [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]){
     const nf=files[fx+dx], nr=r+dy;
-    if(nf&&nr>=1&&nr<=8 && S[nf+nr]===attacker+'n') return true;
+    if(nf&&nr>=1&&nr<=8 && S[nf+nr]===atk+'n') return true;
   }
-  // Bishop / Queen
+  // bishops/queens
   for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
     let x=fx+dx,y=r+dy;
     while(x>=0&&x<8&&y>=1&&y<=8){
-      const sq=files[x]+y,p=S[sq];
-      if(p){ if(colorOf(p)===attacker&&(typeOf(p)==='b'||typeOf(p)==='q')) return true; break; }
-      x+=dx;y+=dy;
+      const sq=files[x]+y, p=S[sq];
+      if(p){ if(colorOf(p)===atk&&(typeOf(p)==='b'||typeOf(p)==='q')) return true; break; }
+      x+=dx; y+=dy;
     }
   }
-  // Rook / Queen
+  // rooks/queens
   for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
     let x=fx+dx,y=r+dy;
     while(x>=0&&x<8&&y>=1&&y<=8){
-      const sq=files[x]+y,p=S[sq];
-      if(p){ if(colorOf(p)===attacker&&(typeOf(p)==='r'||typeOf(p)==='q')) return true; break; }
-      x+=dx;y+=dy;
+      const sq=files[x]+y, p=S[sq];
+      if(p){ if(colorOf(p)===atk&&(typeOf(p)==='r'||typeOf(p)==='q')) return true; break; }
+      x+=dx; y+=dy;
     }
   }
-  // King
+  // kings
   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
     if(!dx&&!dy)continue;
-    const nf=files[fx+dx],nr=r+dy;
-    if(nf&&nr>=1&&nr<=8 && S[nf+nr]===attacker+'k') return true;
+    const nf=files[fx+dx], nr=r+dy;
+    if(nf&&nr>=1&&nr<=8 && S[nf+nr]===atk+'k') return true;
   }
   return false;
 }
 
-function kingSquare(color){ for(let [sq,p] of Object.entries(S)) if(p===color+'k') return sq; return null; }
+function kingSquare(c){ for(const [sq,p] of Object.entries(S)) if(p===c+'k') return sq; return null; }
 function kingInCheck(c){ return squareAttacked(kingSquare(c),c); }
 
 function isLegalMove(from,to){
-  const p=S[from]; if(!p)return false;
-  const c=colorOf(p); if(c!==turn)return false;
+  const p=S[from]; if(!p) return false;
+  const c=colorOf(p); if(c!==turn) return false;
   const t=typeOf(p);
-  const fx=index(from[0]), fy=+from[1];
-  const tx=index(to[0]), ty=+to[1];
+  const fx=idx(from[0]), fy=+from[1], tx=idx(to[0]), ty=+to[1];
   const dx=tx-fx, dy=ty-fy;
   const target=S[to];
-  if(target&&colorOf(target)===c)return false;
+  if(target&&colorOf(target)===c) return false;
 
   switch(t){
-    case'p':{
-      const dir=(c==='w')?1:-1;
-      const start=(c==='w')?2:7;
-      if(dx===0&&!target){
-        if(ty-fy===dir)break;
-        if(fy===start&&ty-fy===2*dir&&!S[files[fx]+(fy+dir)])break;
+    case 'p': {
+      const dir=(c==='w')?1:-1, start=(c==='w')?2:7;
+      if(dx===0 && !target){
+        if(ty-fy===dir) break;
+        if(fy===start && ty-fy===2*dir && !S[files[fx]+(fy+dir)]) break;
         return false;
       }
-      if(Math.abs(dx)===1&&ty-fy===dir&&target)break;
+      if(Math.abs(dx)===1 && ty-fy===dir && target) break;
       return false;
     }
-    case'r':
-      if(!(fx===tx||fy===ty)||!clearPath(from,to))return false;
-      break;
-    case'b':
-      if(!(Math.abs(dx)===Math.abs(dy))||!clearPath(from,to))return false;
-      break;
-    case'q':
-      if(!((fx===tx||fy===ty)||(Math.abs(dx)===Math.abs(dy)))||!clearPath(from,to))return false;
-      break;
-    case'n':
-      if(!((Math.abs(dx)===1&&Math.abs(dy)===2)||(Math.abs(dx)===2&&Math.abs(dy)===1)))return false;
-      break;
-    case'k':{
-      if(Math.abs(dx)<=1&&Math.abs(dy)<=1)break;
-      if(dy===0&&Math.abs(dx)===2){
-        if(kingMoved[c])return false;
+    case 'r':
+      if(!(fx===tx||fy===ty) || !clearPath(from,to)) return false; break;
+    case 'b':
+      if(!(Math.abs(dx)===Math.abs(dy)) || !clearPath(from,to)) return false; break;
+    case 'q':
+      if(!((fx===tx||fy===ty)||(Math.abs(dx)===Math.abs(dy))) || !clearPath(from,to)) return false; break;
+    case 'n':
+      if(!((Math.abs(dx)===1&&Math.abs(dy)===2)||(Math.abs(dx)===2&&Math.abs(dy)===1))) return false; break;
+    case 'k': {
+      if(Math.abs(dx)<=1 && Math.abs(dy)<=1) break;
+      if(dy===0 && Math.abs(dx)===2){
+        if(kingMoved[c]) return false;
         const rank=(c==='w')?1:8;
-        if(tx>fx){ if(S['f'+rank]||S['g'+rank]||S['h'+rank]!==(c+'r')||rookMoved['h'+rank])return false;
-          if(kingInCheck(c)||squareAttacked('f'+rank,c)||squareAttacked('g'+rank,c))return false; break;
-        } else { if(S['d'+rank]||S['c'+rank]||S['a'+rank]!==(c+'r')||rookMoved['a'+rank])return false;
-          if(kingInCheck(c)||squareAttacked('d'+rank,c)||squareAttacked('c'+rank,c))return false; break;
+        if(ty!==rank) return false;
+        if(tx>fx){ // kingside
+          if(S['f'+rank]||S['g'+rank]) return false;
+          if(S['h'+rank]!==c+'r' || rookMoved['h'+rank]) return false;
+          if(kingInCheck(c) || squareAttacked('f'+rank,c) || squareAttacked('g'+rank,c)) return false;
+          break;
+        } else { // queenside
+          if(S['d'+rank]||S['c'+rank]||S['b'+rank]) return false;
+          if(S['a'+rank]!==c+'r' || rookMoved['a'+rank]) return false;
+          if(kingInCheck(c) || squareAttacked('d'+rank,c) || squareAttacked('c'+rank,c)) return false;
+          break;
         }
       }
       return false;
     }
   }
+
+  // simulate: don't expose own king
   const snap=structuredClone(S);
   S[to]=S[from]; delete S[from];
-  const bad=kingInCheck(c);
+  const illegal=kingInCheck(c);
   S=snap;
-  return !bad;
+  return !illegal;
 }
 
-function applyMove(from,to,promoChoice=null){
+function applyMove(from,to,promo=null){
   const p=S[from], c=colorOf(p), t=typeOf(p);
-  const fx=index(from[0]), tx=index(to[0]);
+  const fx=idx(from[0]), tx=idx(to[0]);
   const rank=(c==='w')?1:8;
+
   if(t==='k'){
     kingMoved[c]=true;
     if(Math.abs(tx-fx)===2){
-      if(to==='g'+rank){S['f'+rank]=S['h'+rank];delete S['h'+rank];rookMoved['h'+rank]=true;}
-      if(to==='c'+rank){S['d'+rank]=S['a'+rank];delete S['a'+rank];rookMoved['a'+rank]=true;}
+      if(to==='g'+rank){ S['f'+rank]=S['h'+rank]; delete S['h'+rank]; rookMoved['h'+rank]=true; }
+      if(to==='c'+rank){ S['d'+rank]=S['a'+rank]; delete S['a'+rank]; rookMoved['a'+rank]=true; }
     }
   }
-  if(t==='r'&&(from==='a1'||from==='h1'||from==='a8'||from==='h8'))rookMoved[from]=true;
+  if(t==='r' && (from==='a1'||from==='h1'||from==='a8'||from==='h8')) rookMoved[from]=true;
+
   S[to]=S[from]; delete S[from];
-  if(t==='p'&&(to.endsWith('8')||to.endsWith('1'))){
-    S[to]=c+(promoChoice||'q');
+
+  if(t==='p' && (to.endsWith('8')||to.endsWith('1'))){
+    S[to]=c+(promo||'q');
   }
 }
 
-function noLegalMoves(color){
+function noLegalMoves(c){
   for(const [sq,p] of Object.entries(S)){
-    if(colorOf(p)!==color)continue;
-    for(const f of files)for(const r of ranks){
+    if(colorOf(p)!==c) continue;
+    for(const f of files) for(const r of ranks){
       const t=f+r;
-      if(isLegalMove(sq,t))return false;
+      if(isLegalMove(sq,t)) return false;
     }
   }
   return true;
 }
 
-// --- Promotion Menu ---
-function showPromotionMenu(color,callback){
+function showPromotionMenu(color,cb){
   promoMenu.innerHTML='';
-  const pieces=['q','r','b','n'];
-  pieces.forEach(t=>{
+  ['q','r','b','n'].forEach(t=>{
     const img=document.createElement('img');
     img.src=`pieces/${color+t}.png`;
-    img.onclick=()=>{promoMenu.style.display='none';callback(t);};
+    img.onclick=()=>{ promoMenu.style.display='none'; cb(t); };
     promoMenu.appendChild(img);
   });
   promoMenu.style.display='flex';
-}
-
-// --- Drag and Drop ---
-function enableDragAndDrop(){
-  let dragged=null,source=null;
-  document.querySelectorAll('.piece').forEach(pc=>{
-    pc.addEventListener('dragstart',e=>{
-      const sq=e.target.parentElement.id;
-      if(colorOf(S[sq])!==turn){e.preventDefault();return;}
-      dragged=e.target;source=sq;
-      setTimeout(()=>dragged.style.visibility='hidden',0);
-    });
-    pc.addEventListener('dragend',()=>{if(dragged)dragged.style.visibility='visible';dragged=null;});
-  });
-  document.querySelectorAll('.square').forEach(sq=>{
-    sq.addEventListener('dragover',e=>e.preventDefault());
-    sq.addEventListener('drop',e=>{
-      e.preventDefault();
-      const target=e.target.closest('.square').id;
-      if(!dragged||!source)return;
-      if(isLegalMove(source,target)){
-        const piece=S[source];
-        const color=colorOf(piece);
-        const type=typeOf(piece);
-        if(type==='p' && (target.endsWith('8')||target.endsWith('1'))){
-          showPromotionMenu(color,(choice)=>{
-            applyMove(source,target,choice);
-            afterMove();
-          });
-        } else {
-          applyMove(source,target);
-          afterMove();
-        }
-      }
-      source=null;
-    });
-  });
 }
 
 function afterMove(){
@@ -320,6 +255,56 @@ function afterMove(){
   } else if(noLegalMoves(turn)){
     alert('Stalemate!');
   }
+}
+
+function enableDnD(){
+  let dragged=null, source=null;
+
+  document.querySelectorAll('.piece').forEach(pc=>{
+    pc.addEventListener('dragstart',e=>{
+      const sq=e.target.parentElement.id;
+      if(colorOf(S[sq])!==turn){ e.preventDefault(); return; }
+      dragged=e.target; source=sq;
+      setTimeout(()=>dragged.style.visibility='hidden',0);
+    });
+    pc.addEventListener('dragend',()=>{
+      if(dragged) dragged.style.visibility='visible';
+      dragged=null;
+    });
+  });
+
+  document.querySelectorAll('.square').forEach(sq=>{
+    sq.addEventListener('dragover',e=>e.preventDefault());
+    sq.addEventListener('drop',e=>{
+      e.preventDefault();
+      const target=e.target.closest('.square').id;
+      if(!dragged || !source) return;
+
+      if(isLegalMove(source,target)){
+        const from=source;          // ✅ capture before we clear
+        const to=target;
+
+        const piece=S[from];
+        const t=typeOf(piece);
+        const c=colorOf(piece);
+
+        // promotion flow
+        if(t==='p' && (to.endsWith('8')||to.endsWith('1'))){
+          showPromotionMenu(c,(choice)=>{
+            applyMove(from,to,choice);
+            source=null;            // clear AFTER applying the move
+            afterMove();
+          });
+        } else {
+          applyMove(from,to);
+          source=null;              // clear now that move is applied
+          afterMove();
+        }
+      } else {
+        source=null;
+      }
+    });
+  });
 }
 
 drawBoard();
