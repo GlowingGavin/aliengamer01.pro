@@ -50,7 +50,7 @@
   }
 
   .badge {
-    width: 28px; /* fixed width to prevent shifting */
+    width: 28px;
     text-align: center;
     font-size: 22px;
   }
@@ -103,7 +103,7 @@
 <script>
   const engines = [
     {name: "Stockfish", link: "https://github.com/official-stockfish/Stockfish", img: "lrg_stockfish@2x.png", rating: 3916},
-    {name: "Torch", link: "https://komodochess.com/", img: "lrg_torch@2x.png", rating: 3928},
+    {name: "Torch", img: "lrg_torch@2x.png", rating: 3928}, // no link
     {name: "Reckless", link: "https://github.com/codedeliveryservice/Reckless", img: "lrg_reckless@2x.png", rating: 3771},
     {name: "Obsidian", link: "https://github.com/gab8192/Obsidian", img: "lrg_obsidian@2x.png", rating: 3870},
     {name: "Lc0", link: "https://github.com/LeelaChessZero/lc0", img: "lrg_lc0@2x.png", rating: 3870},
@@ -156,7 +156,9 @@
         <span class="badge">${badge}</span>
         <span class="rank">#${i+1}</span>
         <img src="engine_logos/${engine.img}" alt="${engine.name}">
-        <span class="name"><a href="${engine.link}" target="_blank">${engine.name}</a></span>
+        <span class="name">
+          ${engine.link ? `<a href="${engine.link}" target="_blank" rel="noopener">${engine.name}</a>` : engine.name}
+        </span>
       </div>
       <span class="rating">${engine.rating}</span>
     `;
