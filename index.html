@@ -13,6 +13,7 @@
     justify-content: center;
     padding: 50px;
   }
+
   .leaderboard {
     width: 650px;
     background: #1a1a1d;
@@ -20,6 +21,7 @@
     box-shadow: 0 0 25px rgba(0,0,0,0.6);
     padding: 30px;
   }
+
   .leaderboard h2 {
     text-align: center;
     margin-bottom: 25px;
@@ -27,6 +29,7 @@
     font-size: 28px;
     letter-spacing: 1px;
   }
+
   .entry {
     display: flex;
     align-items: center;
@@ -37,37 +40,50 @@
     margin-bottom: 12px;
     transition: background 0.3s;
   }
+
   .entry:hover { background: #33333a; }
+
   .entry-left {
     display: flex;
     align-items: center;
     gap: 14px;
   }
-  .entry img {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
-    object-fit: cover;
+
+  .badge {
+    width: 28px; /* fixed width to prevent shifting */
+    text-align: center;
+    font-size: 22px;
   }
+
   .rank {
     font-weight: 700;
     color: #ffffff;
     width: 40px;
     text-align: center;
   }
-  .badge {
-    font-size: 22px;
-    margin-right: 6px;
+
+  .entry img {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    object-fit: cover;
   }
+
   .name {
     font-weight: 600;
     text-transform: capitalize;
     font-size: 17px;
   }
+
   .rating {
     font-weight: 700;
     font-size: 17px;
   }
+
+  /* special colors for top 3 */
+  .first .name, .first .rating { color: #FFD700; } /* gold */
+  .second .name, .second .rating { color: #C0C0C0; } /* silver */
+  .third .name, .third .rating { color: #CD7F32; } /* bronze */
 </style>
 </head>
 <body>
@@ -122,10 +138,11 @@
     const div = document.createElement("div");
     div.className = "entry";
 
-    let badge = "";
-    if (i === 0) badge = "🥇";
-    else if (i === 1) badge = "🥈";
-    else if (i === 2) badge = "🥉";
+    if (i === 0) div.classList.add("first");
+    else if (i === 1) div.classList.add("second");
+    else if (i === 2) div.classList.add("third");
+
+    const badge = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "";
 
     div.innerHTML = `
       <div class="entry-left">
