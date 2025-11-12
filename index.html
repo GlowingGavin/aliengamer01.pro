@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AlienGamer Chess – Book Move Detection</title>
+<title>AlienGamer Chess – Board Only</title>
 <style>
   body {
     background:#111;color:#fff;font-family:Arial;
@@ -15,27 +15,16 @@
     grid-template-columns:repeat(8,80px);
     grid-template-rows:repeat(8,80px);
     border:4px solid #000;
-    margin-bottom:20px;
     position:relative;
   }
   .square {
     width:80px;height:80px;display:flex;justify-content:center;align-items:center;
     position:relative;user-select:none;
   }
-  .light{background:#f0d9b5;} .dark{background:#b58863;}
+  .light{background:#f0d9b5;}
+  .dark{background:#b58863;}
   .piece{width:72px;height:72px;cursor:grab;}
-  #turn{font-size:1.3rem;}
-
-  /* overlay + icon */
-  .book-overlay {
-    position:absolute;inset:0;
-    background:rgba(163,121,71,0.5);
-    z-index:1;
-  }
-  .book-icon {
-    position:absolute;top:4px;right:4px;
-    width:22px;height:22px;z-index:2;
-  }
+  #turn{font-size:1.3rem;margin-top:20px;}
 </style>
 </head>
 <body>
@@ -43,8 +32,10 @@
   <div id="turn">White to move</div>
 
 <script>
-const files=['a','b','c','d','e','f','g','h'],ranks=[8,7,6,5,4,3,2,1];
-const board=document.getElementById('board'),turnDisplay=document.getElementById('turn');
+const files=['a','b','c','d','e','f','g','h'];
+const ranks=[8,7,6,5,4,3,2,1];
+const board=document.getElementById('board');
+const turnDisplay=document.getElementById('turn');
 
 let S={
  a8:'br',b8:'bn',c8:'bb',d8:'bq',e8:'bk',f8:'bb',g8:'bn',h8:'br',
@@ -53,11 +44,8 @@ let S={
  a1:'wr',b1:'wn',c1:'wb',d1:'wq',e1:'wk',f1:'wb',g1:'wn',h1:'wr'
 };
 let turn='w';
-let moveHistory=[]; // SAN sequence
-let openings=[];    // loaded from CSV
-let currentBookSquare=null; // currently highlighted square
 
-// ---------- Board ----------
+// Draw the board
 function drawBoard(){
   board.innerHTML='';
   for(const r of ranks){
@@ -70,58 +58,28 @@ function drawBoard(){
       if(p){
         const img=document.createElement('img');
         img.className='piece';
-        img.draggable=true;
         img.src=`pieces/${p}.png`;
+        img.draggable=true;
         sq.appendChild(img);
       }
       board.appendChild(sq);
     }
   }
   turnDisplay.textContent=(turn==='w')?'White to move':'Black to move';
-  enableDnD();
+  enableDrag();
 }
 
-// ---------- Helpers ----------
-function colorOf(p){
-  return (typeof p === 'string' && p.length >= 1) ? p[0] : null;
-}
-function idx(f){return files.indexOf(f);}
+// Basic color function
+function colorOf(p){return p ? p[0] : null;}
 
-// ---------- Simple SAN maker ----------
-function toSAN(piece, from, to){
-  if (!piece) return to;  // safety check
-  const type = piece[1];
-  switch (type) {
-    case 'p': return to;
-    case 'n': return 'N' + to;
-    case 'b': return 'B' + to;
-    case 'r': return 'R' + to;
-    case 'q': return 'Q' + to;
-    case 'k': return 'K' + to;
-    default:  return to;
-  }
-}
-
-// ---------- Move Logic ----------
-function isLegalMove(from,to){
-  const p=S[from];
-  if(!p) return false;
-  if(colorOf(p)!==turn) return false;
-  return true; // simplified: no rule enforcement yet
-}
-function applyMove(from,to){
-  S[to]=S[from];
-  delete S[from];
-}
-
-// ---------- Drag & Drop ----------
-function enableDnD(){
+// Enable drag and drop for pieces
+function enableDrag(){
   let dragged=null,source=null;
   document.querySelectorAll('.piece').forEach(pc=>{
     pc.addEventListener('dragstart',e=>{
       const sq=e.target.parentElement.id;
-      if(colorOf(S[sq])!==turn){e.preventDefault();return;}
-      dragged=e.target;source=sq;
+      dragged=e.target;
+      source=sq;
       setTimeout(()=>dragged.style.visibility='hidden',0);
     });
     pc.addEventListener('dragend',()=>{
@@ -135,61 +93,15 @@ function enableDnD(){
       e.preventDefault();
       const target=e.target.closest('.square').id;
       if(!dragged||!source)return;
-      if(isLegalMove(source,target)){
-        const piece=S[source];
-        applyMove(source,target);
-        const san=toSAN(piece,source,target);
-        moveHistory.push(san);
-        checkBookMove(target);
-        turn=(turn==='w')?'b':'w';
-        drawBoard();
-      }
-      source=null;
+      S[target]=S[source];
+      delete S[source];
+      turn=(turn==='w')?'b':'w';
+      drawBoard();
     });
   });
 }
 
-// ---------- Book Move Detection ----------
-async function loadOpenings(){
-  const res=await fetch('openings.csv');
-  const text=await res.text();
-  const lines=text.trim().split(/\r?\n/);
-  openings=lines.slice(1).map(l=>{
-    const [name,movesStr]=l.split(',');
-    if(!movesStr) return null;
-    return {name:name.trim(),moves:movesStr.trim().split(' ')};
-  }).filter(Boolean);
-}
-
-function checkBookMove(targetSquare){
-  clearBookHighlight();
-  const seq=moveHistory;
-  const inBook=openings.some(op=>{
-    return op.moves.slice(0,seq.length).join(' ')===seq.join(' ');
-  });
-  if(inBook){
-    const sq=document.getElementById(targetSquare);
-    if(!sq) return;
-    const overlay=document.createElement('div');
-    overlay.className='book-overlay';
-    const icon=document.createElement('img');
-    icon.className='book-icon';
-    icon.src='move_classifications/book.png';
-    sq.appendChild(overlay);
-    sq.appendChild(icon);
-    currentBookSquare=sq;
-  }
-}
-
-function clearBookHighlight(){
-  if(currentBookSquare){
-    currentBookSquare.querySelectorAll('.book-overlay,.book-icon').forEach(e=>e.remove());
-    currentBookSquare=null;
-  }
-}
-
-// ---------- Start ----------
-loadOpenings().then(()=>drawBoard());
+drawBoard();
 </script>
 </body>
 </html>
